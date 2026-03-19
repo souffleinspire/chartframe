@@ -83,6 +83,7 @@
   .fg input:focus, .fg textarea:focus {
     border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-bg);
   }
+  .fg input::placeholder, .fg textarea::placeholder { color: #ccc; }
   .fg textarea { resize: vertical; min-height: 42px; }
 
   .hr { height:1px; background:var(--border); }
@@ -280,7 +281,7 @@
   </svg>
   <div class="title-group">
     <h1>ChartFrame</h1>
-    <span>图表装裱：加标题、加来源、加水印、导高清图</span>
+
   </div>
 </div>
 
@@ -367,19 +368,17 @@
               <span id="wm-img-hint">未上传水印图片</span>
               <img id="wm-img-thumb" class="hid">
             </div>
-            <div class="btn-row">
-              <button class="btn bs" style="font-size:12px" onclick="document.getElementById('wm-fi').click()">上传水印图片</button>
-              <button class="btn bs" style="font-size:12px" onclick="saveWmImage()">
-                保存为默认
-                <span id="wm-saved-dot" class="hid saved-badge">已保存</span>
-              </button>
+            <button class="btn bs" style="font-size:12px;width:100%" onclick="document.getElementById('wm-fi').click()">上传水印图片</button>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+              <button class="btn bs" style="font-size:12px;flex:1" onclick="saveWmImage()">保存为默认</button>
+              <span id="wm-saved-dot" class="hid" style="font-size:11px;color:#16a34a;white-space:nowrap">✓ 已保存</span>
+              <button class="btn bd" id="wm-clear-btn" onclick="clearSavedWm()" style="display:none;font-size:11px;padding:5px 10px">清除</button>
             </div>
-            <button class="btn bd" id="wm-clear-btn" onclick="clearSavedWm()" style="display:none">清除已保存的默认水印</button>
             <input type="file" id="wm-fi" accept="image/*" style="display:none" onchange="loadWmImage(this.files[0])">
             <div class="fg">
               <label>水印大小</label>
               <div class="range-row">
-                <input type="range" id="wm-img-size" min="5" max="100" value="100" oninput="renderWatermark();this.nextElementSibling.textContent=this.value+'%'">
+                <input type="range" id="wm-img-size" min="5" max="200" value="100" oninput="renderWatermark();this.nextElementSibling.textContent=this.value+'%'">
                 <span class="rv">100%</span>
               </div>
             </div>
@@ -392,15 +391,15 @@
             <div class="fg">
               <label>透明度</label>
               <div class="range-row">
-                <input type="range" id="wm-opacity" min="2" max="40" value="5" oninput="renderWatermark();this.nextElementSibling.textContent=this.value+'%'">
+                <input type="range" id="wm-opacity" min="2" max="100" value="5" oninput="renderWatermark();this.nextElementSibling.textContent=this.value+'%'">
                 <span class="rv">5%</span>
               </div>
             </div>
             <div class="fg">
               <label>旋转角度</label>
               <div class="range-row">
-                <input type="range" id="wm-rotate" min="-60" max="0" value="-25" oninput="renderWatermark();this.nextElementSibling.textContent=this.value+'°'">
-                <span class="rv">-25°</span>
+                <input type="range" id="wm-rotate" min="-60" max="60" value="0" oninput="renderWatermark();this.nextElementSibling.textContent=this.value+'°'">
+                <span class="rv">0°</span>
               </div>
             </div>
             <div class="fg">
@@ -705,24 +704,41 @@ function renderWatermark() {
   } else if (wmMode === 'image') {
     if (!wmImageData) { layer.style.display = 'none'; return; }
     const pct = parseInt(document.getElementById('wm-img-size').value) / 100;
-    // Base width = card width, then scale by percentage
-    const cardW = document.getElementById('pcard').offsetWidth;
-    const size = cardW * pct;
+    const card = document.getElementById('pcard');
+    const cardW = card.offsetWidth;
+    const cardH = card.offsetHeight;
 
-    // We need to draw the image — load it first
     const img = new Image();
     img.onload = () => {
       const aspect = img.width / img.height;
-      const w = size;
-      const h = size / aspect;
-      tileCanvas.width = w + gap;
-      tileCanvas.height = h + gap;
-      ctx.globalAlpha = opacity;
-      ctx.drawImage(img, 0, (tileCanvas.height - h) / 2, w, h);
-      applyTile(layer, tileCanvas, rotate);
+      const w = cardW * pct;
+      const h = w / aspect;
+
+      layer.innerHTML = '';
+      const cvs = document.createElement('canvas');
+      cvs.width = cardW;
+      cvs.height = cardH;
+      const c = cvs.getContext('2d');
+      c.globalAlpha = opacity;
+      const dx = (cardW - w) / 2;
+      const dy = (cardH - h) / 2;
+      c.translate(cardW / 2, cardH / 2);
+      c.rotate(rotate * Math.PI / 180);
+      c.translate(-cardW / 2, -cardH / 2);
+      c.drawImage(img, dx, dy, w, h);
+
+      const inner = document.createElement('div');
+      inner.style.cssText = `
+        position: absolute; inset: 0;
+        background-image: url(${cvs.toDataURL()});
+        background-repeat: no-repeat;
+        background-size: 100% 100%;
+        pointer-events: none;
+      `;
+      layer.appendChild(inner);
     };
     img.src = wmImageData;
-    return; // async, will call applyTile when ready
+    return;
   }
 
   applyTile(layer, tileCanvas, rotate);
